@@ -25,8 +25,8 @@ class Server:
 		self.connectionListenerThread.do_run = False
 
 	def terminateAllUserSessions(self):
-		for t in self.userThreads:
-			t.do_run = False
+		for u in self.users:
+			u.disconnect()
 
 	def initConnectionListener(self):
 		try:
@@ -65,55 +65,71 @@ class Server:
 				self.terminateAllUserSessions()
 				self.soc.close()
 
+	class User():
+		def __init__(self, ip, port, connection, bufferSize = 1024):
+			self.ip = ip
+			self.port = port
+			self.connection = connection
+			self.bufferSize = bufferSize
+			self.is_active = True
+			self.initInputThread()
+
+		def initInputThread(self):
+			try:
+				self.t = threading.Thread(target=self.userInputThread)
+				self.t.setDaemon(True)
+				self.t.start()
+			except Exception as e:
+				print("Listener thread for user " + str(self.ip)+":"+str(self.port)+" failed to start: "+ str(e))
+
+		def terminateInputThread(self):
+			self.t.do_run = False
+
+		def disconnect(self):
+			self.is_active = False
+
+		def userInputThread(self,max_buffer_size=1024):
+			t = threading.currentThread()
+			#if not terminated run listening loop
+			while self.is_active and getattr(t, "do_run", True):
+				#TODO add threads for receiving and processings
+				client_input = self.receive_input()
+				if "--quit--" in client_input:
+					print("Client is requesting to quit")
+					self.connection.close()
+					print("Connection " + self.ip + ":" + self.port + " closed")
+					self.is_active = False
+				else:
+					print("Processed result: {}".format(client_input))
+
+		def receive_input(self):
+			client_input = self.connection.recv(self.bufferSize)
+			client_input_size = sys.getsizeof(client_input)
+
+			if client_input_size > self.bufferSize:
+				print("The input size is greater than expected {}".format(client_input_size))
+
+			decoded_input = client_input.decode("utf8").rstrip()  # decode and strip end of line
+			result = self.process_input(decoded_input)
+
+			return result
+
+
+		def process_input(self, input_str):
+			print("Processing the input received from client " + self.ip +":" + self.port + " :")
+			return str(input_str)
+
 	def connectionListener(self):
-		self.userThreads = []
+		self.users = []
 		t = threading.currentThread()
 		while getattr(t, "do_run", True):
 			connection, address = self.soc.accept()
 
 			ip, port = str(address[0]), str(address[1])
 
+			self.users.append(self.User(ip,port, connection))
+
 			print("User connected " + ip + ":" + port)
-			try:
-				t = threading.Thread(target=self.client_thread, args=(connection, ip, port))
-				t.setDaemon(True)
-				self.userThreads.append(t)
-				self.userThreads[-1].start()
-			except Exception as e:
-				print("Listener thread for user " + str(address[0])+":"+str(address[0])+" failed to start: "+ str(e))
-
-	def client_thread(self,connection, ip, port, max_buffer_size=1024):
-		is_active = True
-		t = threading.currentThread()
-		#if not terminated run listening loop
-		while is_active and getattr(t, "do_run", True):
-			#TODO add threads for receiving and processings
-			client_input = self.receive_input(connection, max_buffer_size)
-
-			if "--quit--" in client_input:
-				print("Client is requesting to quit")
-				connection.close()
-				print("Connection " + ip + ":" + port + " closed")
-				is_active = False
-			else:
-				print("Processed result: {}".format(client_input))
-
-	def receive_input(self, connection, max_buffer_size):
-		client_input = connection.recv(max_buffer_size)
-		client_input_size = sys.getsizeof(client_input)
-
-		if client_input_size > max_buffer_size:
-			print("The input size is greater than expected {}".format(client_input_size))
-
-		decoded_input = client_input.decode("utf8").rstrip()  # decode and strip end of line
-		result = self.process_input(decoded_input)
-
-		return result
-
-
-	def process_input(self, input_str):
-		print("Processing the input received from client")
-		return str(input_str)
 
 def main():
 	host = "127.0.0.1"
