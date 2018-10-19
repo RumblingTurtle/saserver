@@ -11,11 +11,12 @@ class ServerClient():
                     ]
 
     def __init__(self, hostAddr, port):
-        self.initSocket(hostAddr,port)
         self.connected = False
 
         res = self.initThreads()
-
+        
+        self.host = hostAddr
+        self.port = port
         self.connect()
         #Check if threads are initiated correctly
         if res != 0 :
@@ -49,6 +50,8 @@ class ServerClient():
 
 
     def connect(self):
+        if not self.connected:
+            self.initSocket(self.host,self.port)
         #If host address and port are specified 
         if self.host!=None and self.port!=None:
             try:
@@ -62,7 +65,7 @@ class ServerClient():
                     print("Can't connect. Socket is already occupied.")
                 else:
                     print("Connection error: "+str(e))
-                print("Please try again.(Type reconnect)")
+                print("Please try again.(Type connect)")
                 return
             #List all commands
             print("Client connected to the server. you can use following commands:")
@@ -141,7 +144,6 @@ class ServerClient():
                 if self.connected:
                     self.closeConnection()
                     self.connected = False
-                    print("Disconnected from server")
                 else:
                     print("You are already disconnected from server")
                 continue
@@ -163,6 +165,7 @@ class ServerClient():
         #If connection is dead don't try to close it
         if not self.connected:
             return
+
         self.connected = False
         self.soc.send(b'--quit--')
         self.soc.close()
