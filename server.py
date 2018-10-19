@@ -4,6 +4,7 @@ import traceback
 import threading
 
 #TODO run user routines in seperate threads, add server console input commands(store user info for listing and abortion)
+#New connection generates new user instance with its own thread for processing and loop
 
 class Server:
 	def __init__(self,hostAddr, port):
@@ -11,18 +12,31 @@ class Server:
 		self.port = port
 
 		self.initSocket()
-		res = self.bindHost()
 
-		connectionThread = threading.Thread(target= self.connectionListener)
-		connectionThread.setDaemon(True)
+		hostRes = self.bindHost()
+		listenerRes = self.initConnectionListener()
 
-		connectionThread.start()
-		self.serverLoop()
+		if hostRes+listenerRes==0:
+			self.serverLoop()
+
+		self.terminateConnectionListener()
+
+	def terminateConnectionListener(self):
+		self.connectionListenerThread.do_run = False
 
 	def terminateAllUserSessions(self):
 		for t in self.userThreads:
 			t.do_run = False
 
+	def initConnectionListener(self):
+		try:
+			self.connectionListenerThread = threading.Thread(target= self.connectionListener)
+			self.connectionListenerThread.setDaemon(True)
+			self.connectionListenerThread.start()
+		except Exception e:
+			print("Connection listener creation failed.")
+			return -1
+		return 0
 
 	def initSocket(self):
 		self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,6 +55,7 @@ class Server:
 
 		self.soc.listen(5)       # queue up to 5 requests
 		print("Socket now listening")
+		return 0
 
 	def serverLoop(self):
 		try:
@@ -52,7 +67,8 @@ class Server:
 
 	def connectionListener(self):
 		self.userThreads = []
-		while True:
+		t = threading.currentThread()
+		while getattr(t, "do_run", True):
 			connection, address = self.soc.accept()
 
 			ip, port = str(address[0]), str(address[1])
