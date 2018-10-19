@@ -33,7 +33,7 @@ class Server:
 			self.connectionListenerThread = threading.Thread(target= self.connectionListener)
 			self.connectionListenerThread.setDaemon(True)
 			self.connectionListenerThread.start()
-		except Exception e:
+		except Exception:
 			print("Connection listener creation failed.")
 			return -1
 		return 0
