@@ -3,9 +3,7 @@ import sys
 import traceback
 import threading
 
-#TODO run user routines in seperate threads, add server console input commands(store user info for listing and abortion)
-#New connection generates new user instance with its own thread for processing and loop
-
+#TODO add threaded server console input commands
 class Server:
 	def __init__(self,hostAddr, port):
 		self.host = hostAddr
