@@ -10,20 +10,22 @@ class ServerClient():
                     ("disconnect","Disconnect from the server"),
                     ]
 
-    def __init__(self, hostAddr, port):
+    def __init__(self, hostAddr, port, listenToUserInput):
         self.connected = False
-
-        res = self.initThreads()
-        
         self.host = hostAddr
         self.port = port
-        self.connect()
-        #Check if threads are initiated correctly
-        if res != 0 :
+        self.listenToUserInput = listenToUserInput
+        #Enables user input listener with persistent connection
+        if listenToUserInput:
+            res = self.initThreads()
+            self.connect()
+            #Check if threads are initiated correctly
+            if res != 0 :
+                return
+            #Run client loop
+            self.clientLoop()
+        else:
             return
-
-        #Run client loop
-        self.clientLoop()
 
     def initSocket(self, hostAddr, port):
         self.soc = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -67,16 +69,36 @@ class ServerClient():
                     print("Connection error: "+str(e))
                 print("Please try again.(Type connect)")
                 return
-            #List all commands
-            print("Client connected to the server. you can use following commands:")
-
-            for command in ServerClient.commandList:
-                print("\t"+command[0]+":"+command[1])
-            print()
+            if self.listenToUserInput:
+                #List all commands
+                print("Client connected to the server. you can use following commands:")
+                for command in ServerClient.commandList:
+                    print("\t"+command[0]+":"+command[1])
+                print()
+            else:
+                print("Client connected to the server: "+str(self.host)+":"+str(self.port))
             #Let threads do their thing
             self.connected = True
         else:
             print("Default host and port are not specified")
+
+    #This method should be used in case if you are not using the user input from console
+    def oneShotMessage(self,message, encoding, responseBufferSize):
+        #Connect to the server
+        #Send a message
+        #Recieve response
+        #Close connection
+        try:
+            self.connect()
+            #Try to send message
+            self.soc.sendall(message.encode(encoding))
+            response = self.soc.recv(responseBufferSize).decode(encoding)
+            self.soc.sendall("--quit--".encode(encoding))
+            self.closeConnection()
+            return response
+        except Exception as e:
+            print("Message was not sent: " + str(e))
+            return None
 
     def sendMessage(self,message, encoding):
         try:
@@ -182,12 +204,3 @@ class ServerClient():
             #Stop input thread
             self.closeConnection()
             self.terminateThreads()
-        
-#Example
-def main():
-    host = "127.0.0.1"
-    port = 9090
-    client = ServerClient(host, port)
-
-main()
-

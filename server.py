@@ -2,12 +2,17 @@ import socket
 import sys
 import traceback
 import threading
+import sqlite3
+import json
 
 #TODO add threaded server console input commands
 class Server:
-	def __init__(self,hostAddr, port):
+	dbpath = ""
+
+	def __init__(self,hostAddr, port, dbPath):
 		self.host = hostAddr
 		self.port = port
+		Server.dbpath = dbPath
 
 		self.initSocket()
 
@@ -93,12 +98,42 @@ class Server:
 				#TODO add threads for receiving and processings
 				client_input = self.receive_input()
 				if "--quit--" in client_input:
+					self.connection.send(b"OK")
 					print("Client is requesting to quit")
 					self.connection.close()
 					print("Connection " + self.ip + ":" + self.port + " closed")
 					self.is_active = False
-				else:
+				elif "checkuser" in client_input:
+					payload = client_input.split(":")[1]
+					username, password = payload.split("|")
+					conn = sqlite3.connect(Server.dbpath)
+					cursor = conn.cursor()
+					sql = "SELECT * FROM control_operator WHERE login=?"
+					cursor.execute(sql, [(username)])
+					record = cursor.fetchone()
+					recordpass = record[2]
+					if recordpass == password:
+						self.connection.send(b"OK")
+					else:
+						self.connection.send(b"NOT OK")
 					print("Processed result: {}".format(client_input))
+				elif "getDrivers" in client_input:
+					result = []
+					sql = "SELECT * FROM delivery_operator"
+					conn = sqlite3.connect(Server.dbpath)
+					cursor = conn.cursor()
+					cursor.execute(sql)
+					records = cursor.fetchall()
+					for record in records:
+						dId = record[0]
+						name = record[3]
+						surname = record[4]
+						phone = record[6]
+						lat = record[7]
+						longt = record[8]
+						result.append({"id":dId,"name":name,"surname":surname,"phone":phone,"lat":lat,"long":longt})
+					self.connection.send(json.dumps(result, separators=(',',':')).encode("utf-8"))
+
 
 		def receive_input(self):
 			client_input = self.connection.recv(self.bufferSize)
@@ -132,6 +167,7 @@ class Server:
 def main():
 	host = "127.0.0.1"
 	port = 9090
-	server = Server(host,port)        
+	server = Server(host,port,"Transport Company DB.db") 
+
 main()
 
