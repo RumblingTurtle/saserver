@@ -34,7 +34,7 @@ class ServerClient():
 
     def initThreads(self):
         #Server listener thread
-        self.t = threading.Thread(target=self.listenToServer, args=(1024,"utf-8"))
+        self.t = threading.Thread(target=self.listenToServer, args=(8192,"utf-8"))
         #User input listener thread
         self.it  = threading.Thread(target=self.listenToInput, args = ())
 
@@ -92,10 +92,20 @@ class ServerClient():
             self.connect()
             #Try to send message
             self.soc.sendall(message.encode(encoding))
-            response = self.soc.recv(responseBufferSize).decode(encoding)
-            self.soc.sendall("--quit--".encode(encoding))
+            chunks = []
+            while True:
+                data = self.soc.recv(responseBufferSize)
+                if len(data)<responseBufferSize:
+                    chunks.append(data)
+                    break
+                chunks.append(data)
+            response = b""
+            print(chunks)
+            for c in chunks:
+                response+=c
+            self.soc.send("--quit--".encode(encoding))
             self.closeConnection()
-            return response
+            return response[:-3].decode(encoding)
         except Exception as e:
             print("Message was not sent: " + str(e))
             return None

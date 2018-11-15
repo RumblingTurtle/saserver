@@ -4,10 +4,10 @@ import traceback
 import threading
 import sqlite3
 import json
+from dbutils import *
 
 #TODO add threaded server console input commands
 class Server:
-	dbpath = ""
 
 	def __init__(self,hostAddr, port, dbPath):
 		self.host = hostAddr
@@ -69,7 +69,7 @@ class Server:
 				self.soc.close()
 
 	class User():
-		def __init__(self, ip, port, connection, bufferSize = 1024):
+		def __init__(self, ip, port, connection, bufferSize = 8192):
 			self.ip = ip
 			self.port = port
 			self.connection = connection
@@ -91,7 +91,7 @@ class Server:
 		def disconnect(self):
 			self.is_active = False
 
-		def userInputThread(self,max_buffer_size=1024):
+		def userInputThread(self,max_buffer_size=8192):
 			t = threading.currentThread()
 			#if not terminated run listening loop
 			while self.is_active and getattr(t, "do_run", True):
@@ -106,34 +106,29 @@ class Server:
 				elif "checkuser" in client_input:
 					payload = client_input.split(":")[1]
 					username, password = payload.split("|")
-					conn = sqlite3.connect(Server.dbpath)
-					cursor = conn.cursor()
-					sql = "SELECT * FROM control_operator WHERE login=?"
-					cursor.execute(sql, [(username)])
-					record = cursor.fetchone()
-					recordpass = record[2]
-					if recordpass == password:
-						self.connection.send(b"OK")
+					if checkOperator(username, password):
+						self.connection.send(b"OK"+b"EOF")
 					else:
-						self.connection.send(b"NOT OK")
+						self.connection.send(b"NOT OK"+b"EOF")
 					print("Processed result: {}".format(client_input))
 				elif "getDrivers" in client_input:
-					result = []
-					sql = "SELECT * FROM delivery_operator"
-					conn = sqlite3.connect(Server.dbpath)
-					cursor = conn.cursor()
-					cursor.execute(sql)
-					records = cursor.fetchall()
-					for record in records:
-						dId = record[0]
-						name = record[3]
-						surname = record[4]
-						phone = record[6]
-						lat = record[7]
-						longt = record[8]
-						result.append({"id":dId,"name":name,"surname":surname,"phone":phone,"lat":lat,"long":longt})
-					self.connection.send(json.dumps(result, separators=(',',':')).encode("utf-8"))
-
+					self.connection.sendall(json.dumps(getDrivers(), separators=(',',':')).encode("utf-8")+b"EOF")
+				elif "getWarehouses" in client_input:
+					self.connection.sendall(json.dumps(getWarehouses(), separators=(',',':')).encode("utf-8")+b"EOF")
+				elif "getOrders" in client_input:
+					self.connection.sendall(json.dumps(getOrders(), separators=(',',':')).encode("utf-8")+b"EOF")
+				elif "setRoute" in client_input:
+					inp = client_input.split(":")[1]
+					inp = inp.split("|")
+					rid = inp[0]
+					route = inp[1]
+					route = route.replace("[","{").replace("]","}")
+					setOrderRoute(rid,route)
+					self.connection.send(b"OK"+b"EOF")
+				elif "denyOrder" in client_input:
+					oid = client_input.split(":")[1]
+					denyOrder(oid)
+					self.connection.send(b"OK"+b"EOF")
 
 		def receive_input(self):
 			client_input = self.connection.recv(self.bufferSize)
